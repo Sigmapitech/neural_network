@@ -1,0 +1,8 @@
+# Ignore Python cache files and virtual environments
+__pycache__/
+*.egg-info/
+.venv
+
+# Ignore dataset and final executable
+my_torch_analyzer
+dataset/
