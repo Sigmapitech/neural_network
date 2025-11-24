@@ -6,3 +6,5 @@ __pycache__/
 # Ignore dataset and final executable
 my_torch_analyzer
 dataset/
+data/
+results/

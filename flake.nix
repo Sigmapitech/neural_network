@@ -79,6 +79,7 @@
             dev = [
               black
               isort
+              matplotlib
             ];
           };
 
