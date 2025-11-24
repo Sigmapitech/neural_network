@@ -8,3 +8,5 @@ my_torch_analyzer
 dataset/
 data/
 results/
+
+.pre-commit-config.yaml
