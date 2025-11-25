@@ -1,28 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "my_torch_analyzer"
-version = "0.0.1"
-description = "A clash of kings"
-license = { text = "BSD-3-Clause" }
-requires-python = ">=3.12"
-dependencies = [
-  "matplotlib"
-]
-
-[project.scripts]
-my_torch_analyzer = "src.main:main"
-
-[project.optional-dependencies]
-dev = [
-  "black",
-  "isort"
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src"]
+requires = ["setuptools>=42.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.black]
 line-length = 79
@@ -34,3 +12,17 @@ line_length = 79
 known_first_party = ["src"]
 multi_line_output = 3
 include_trailing_comma = true
+
+[tool.mypy]
+mypy_path = "src"
+check_untyped_defs = true
+disallow_any_generics = true
+ignore_missing_imports = true
+no_implicit_optional = true
+show_error_codes = true
+strict_equality = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_configs = true
+no_implicit_reexport = true
