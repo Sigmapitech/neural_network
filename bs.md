@@ -29,10 +29,12 @@ This document explains the full journey of building neural models from first pri
 
 Given inputs x ∈ ℝ^n, weights w ∈ ℝ^n, bias b:
 
-```sh
-z = Σ_i w_i x_i + b
-ŷ = 1 if z ≥ 0 else 0   (Heaviside)
+```text
+z = Σ_i w_i x_i + b    (dot product: z = w·x + b)
+ŷ = 1 if z ≥ 0 else 0  (Heaviside step)
 ```
+
+Clarifying notation: x ∈ ℝ^n means x is an n‑dimensional real‑valued feature vector, i.e., x = (x₁, x₂, …, x_n) with each xᵢ ∈ ℝ; similarly w ∈ ℝ^n and b ∈ ℝ.
 
 Alternate activation (tanh threshold) provided for experimentation.
 
@@ -167,6 +169,8 @@ python3 bs/my_perceptron.py --new 2 --train --steps 40 --max-phases 30 data/xor_
 ```
 
 Output includes per-phase accuracy history.
+
+Prediction file format: lines may contain either just the inputs or `inputs + label` (0/1). In prediction mode the label, if present, is ignored, allowing reuse of the original training truth table without manual editing.
 
 ## AND Gate Automation (`scripts/automate_and_gate.py`)
 
@@ -309,7 +313,57 @@ Optional scatter plot if matplotlib present.
 python3 scripts/infer_mlp.py --model results/xor_model.json --input 0 1
 ```
 
-Prints raw sigmoid outputs. Binary outputs thresholded at 0.5; multi-class uses argmax index.
+What it does: loads a saved JSON model and runs a forward pass on a single input vector you provide on the command line.
+
+Usage:
+
+```bash
+python3 scripts/infer_mlp.py --model <path/to/model.json> --input <space-separated numbers>
+```
+
+- Input length must match the model’s input size (`layer_sizes[0]`).
+- Tic‑Tac‑Toe inputs are 9 numbers with X=1, O=−1, empty=0 (row‑major).
+
+Helpful flags:
+
+- `--labels`: when output has 3 classes, also prints the class name (order `[ongoing, draw, win]`).
+- `--ttt-gt`: for 9‑value inputs, computes and prints the Tic‑Tac‑Toe ground‑truth class using the rule helpers.
+
+Output interpretation:
+
+- Binary models: prints one sigmoid value in [0,1] and a line `Binary Thresholded=0|1` (threshold 0.5).
+- Multi‑class (Tic‑Tac‑Toe): prints the list of three sigmoid values and a line `Argmax Class=<index>`. Class order used by training is `[ongoing, draw, win]`. Values do not necessarily sum to 1 (not softmax).
+
+Examples:
+
+```text
+Input=[0, 1]
+Raw Output=[0.842]
+Binary Thresholded=1
+```
+
+```text
+Input=[0, 0, 0, 0, 1, 0, 0, 0, 0]
+Raw Output=[0.903, 0.001, 0.099]
+Argmax Class=0   # class 0 = "ongoing"
+```
+
+With labels and ground truth:
+
+```bash
+python3 scripts/infer_mlp.py --model results/tictactoe_multi.json \
+  --input 1 0 1 -1 -1 -1 0 1 0 --labels --ttt-gt
+```
+
+```text
+Input=[1.0, 0.0, 1.0, -1.0, -1.0, -1.0, 0.0, 1.0, 0.0]
+Raw Output=[...]
+Argmax Class=0
+Argmax Label=ongoing
+GroundTruth Class=2 Label=win (0=ongoing,1=draw,2=win)
+```
+
+If you prefer probability‑like outputs that sum to 1, switch the final layer to softmax (or add a softmax option for inference).
 
 ## Visualization (`scripts/visualize_results.py`)
 

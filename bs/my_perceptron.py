@@ -315,14 +315,29 @@ def main():
     else:
         samples = read_input_file(file_arg)
         outputs = []
+        cleaned_inputs = []
         for s in samples:
-            if len(s) != len(perceptron.weights):
-                error("Sample size does not match perceptron input count")
-            outputs.append(perceptron.predict(s))
+            # Allow prediction file lines to optionally include a trailing label (0/1) like training data.
+            if len(s) == len(perceptron.weights):
+                cleaned_inputs.append(s)
+            elif len(s) == len(perceptron.weights) + 1 and s[-1] in (0.0, 1.0):
+                cleaned_inputs.append(s[:-1])  # ignore provided label
+            else:
+                error(
+                    "Sample size does not match perceptron input count (expected inputs or inputs+label)"
+                )
+        for inp in cleaned_inputs:
+            outputs.append(perceptron.predict(inp))
 
-        # Display predictions
-        for inp, out in zip(samples, outputs):
-            print(f"INPUT={inp} OUTPUT={out}")
+        # Display predictions (show original line if label stripped)
+        for raw, inp, out in zip(samples, cleaned_inputs, outputs):
+            suffix = ""
+            if len(raw) == len(perceptron.weights) + 1 and raw[-1] in (
+                0.0,
+                1.0,
+            ):
+                suffix = f" (label={int(raw[-1])} ignored)"
+            print(f"INPUT={inp} OUTPUT={out}{suffix}")
 
     # Save or print state
     if save_idx is not None:
