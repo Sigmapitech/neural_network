@@ -27,37 +27,40 @@ This document explains the full journey of building neural models from first pri
 
 ### Perceptron Decision Rule
 
-Given inputs x ∈ ℝ^n, weights w ∈ ℝ^n, bias b:
+Given inputs $x \in \mathbb{R}^n$, weights $w \in \mathbb{R}^n$, bias $b$:
 
-```text
-z = Σ_i w_i x_i + b    (dot product: z = w·x + b)
-ŷ = 1 if z ≥ 0 else 0  (Heaviside step)
-```
+$$
+z = \sum_i w_i x_i + b,\quad
+\hat y = H(z) = \begin{cases}
+1 & z \ge 0 \\
+0 & \text{otherwise}
+\end{cases}
+$$
 
-Clarifying notation: x ∈ ℝ^n means x is an n‑dimensional real‑valued feature vector, i.e., x = (x₁, x₂, …, x_n) with each xᵢ ∈ ℝ; similarly w ∈ ℝ^n and b ∈ ℝ.
+Clarifying notation: $x \in \mathbb{R}^n$ means $x$ is an $n$‑dimensional real‑valued feature vector, i.e., $x = (x_1, x_2, \dots, x_n)$ with each $x_i \in \mathbb{R}$; similarly $w \in \mathbb{R}^n$ and $b \in \mathbb{R}$.
 
 Alternate activation (tanh threshold) provided for experimentation.
 
 ### Perceptron Update (Online Misclassification Correction)
 
-For a sample (x, y) with prediction ŷ:
+For a sample $(x, y)$ with prediction $\hat y$:
 
-```sh
-error = y - ŷ
-w_i ← w_i + lr * error * x_i
-b   ← b   + lr * error
-```
+$$
+  \text{error} = y - \hat y,\quad
+w_i \leftarrow w_i + \mathrm{lr}\,\cdot\,\text{error}\,\cdot\, x_i,\quad
+b \leftarrow b + \mathrm{lr}\,\cdot\,\text{error}.
+$$
 
 Only misclassified samples update parameters (classic perceptron rule, not gradient descent).
 
 ### MLP Forward Pass
 
-Layer sizes: L0 (input) … Lk (output). For neuron j in layer L:
+Layer sizes: $L_0$ (input) … $L_k$ (output). For neuron $j$ in layer $L$:
 
-```sh
-z_j^L = Σ_i w_{j,i}^L a_i^{L-1} + b_j^L
-a_j^L = σ(z_j^L) = 1/(1+e^{-z_j^L})
-```
+$$
+z_j^{(L)} = \sum_i w_{j,i}^{(L)}\, a_i^{(L-1)} + b_j^{(L)},\quad
+a_j^{(L)} = \sigma\big(z_j^{(L)}\big) = \frac{1}{1 + e^{-z_j^{(L)}}}.
+$$
 
 Internal storage:
 
@@ -67,34 +70,34 @@ Internal storage:
 
 ### Loss (Per Sample, MSE)
 
-```sh
-L = Σ_j 0.5 * (a_j^out - y_j)^2
-```
+$$
+\mathcal{L} = \sum_j \tfrac{1}{2}\,\big(a_j^{(\text{out})} - y_j\big)^2.
+$$
 
 Using MSE for simplicity (cross‑entropy would be more suitable for classification but requires softmax modifications).
 
 ### Backpropagation Derivatives
 
-Sigmoid derivative given activation a: σ'(a) = a(1−a).
+Sigmoid derivative given activation $a$: $\sigma'(a) = a(1-a)$.
 
 Output deltas:
 
-```sh
-δ_j^out = (a_j^out - y_j) * σ'(a_j^out)
-```
+$$
+\delta_j^{(\text{out})} = \big(a_j^{(\text{out})} - y_j\big)\,\sigma'\!\big(a_j^{(\text{out})}\big).
+$$
 
 Hidden layer deltas (chain rule):
 
-```sh
-δ_i^L = ( Σ_j w_{j,i}^{L+1} δ_j^{L+1} ) * σ'(a_i^L)
-```
+$$
+\delta_i^{(L)} = \left( \sum_j w_{j,i}^{(L+1)}\, \delta_j^{(L+1)} \right)\, \sigma'\!\big(a_i^{(L)}\big).
+$$
 
 Weight & bias gradients:
 
-```sh
-∂L/∂w_{j,i}^L = δ_j^L * a_i^{L-1}
-∂L/∂b_j^L     = δ_j^L
-```
+$$
+\frac{\partial \mathcal{L}}{\partial w_{j,i}^{(L)}} = \delta_j^{(L)}\, a_i^{(L-1)},\quad
+\frac{\partial \mathcal{L}}{\partial b_j^{(L)}} = \delta_j^{(L)}.
+$$
 
 Mini‑batch accumulation sums gradients across the batch; final update divides by batch size (average gradient).
 
@@ -146,7 +149,7 @@ Optional plotting via `matplotlib` (included in `pyproject.toml`).
 
 ## Perceptron Internals (`bs/my_perceptron.py`)
 
-Equation: `output = 1 if (Σ w_i x_i + b) >= 0 else 0`.
+Equation: $\hat y = H\!\left(\sum_i w_i x_i + b\right)$.
 Update rule (per misclassified sample): `w_i ← w_i + lr * (y - ŷ) * x_i`, `b ← b + lr * (y - ŷ)`.
 
 Training uses PHASES:
@@ -264,22 +267,22 @@ Outputs:
 - Console summary: final train & validation accuracy + sample validation predictions.
 Hidden layer deltas:
 
-```sh
-δ_i^{L} = (Σ_j w_{j,i}^{L+1} δ_j^{L+1}) * σ'(a_i^{L})
-```
+$$
+\delta_i^{(L)} = \left( \sum_j w_{j,i}^{(L+1)}\, \delta_j^{(L+1)} \right)\, \sigma'\!\big(a_i^{(L)}\big).
+$$
 
 Gradients:
 
-```sh
-∂L/∂w_{j,i}^L = δ_j^L * a_i^{L-1}
-∂L/∂b_j^L     = δ_j^L
-```
+$$
+\frac{\partial \mathcal{L}}{\partial w_{j,i}^{(L)}} = \delta_j^{(L)}\, a_i^{(L-1)},\quad
+\frac{\partial \mathcal{L}}{\partial b_j^{(L)}} = \delta_j^{(L)}.
+$$
 
 Batch update (average gradient over batch) using learning rate `lr`.
 
 Mini‑batch: specify `batch_size` in `train_epoch`; if ≤0 uses full dataset.
 
-Learning rate decay: each epoch `lr ← lr * (1 - lr_decay)` when `lr_decay > 0`.
+Learning rate decay: each epoch $\mathrm{lr} \leftarrow \mathrm{lr}\,(1 - \mathrm{lr\_decay})$ when `lr_decay > 0`.
 
 ## XOR Training (`scripts/train_xor_mlp.py`)
 
