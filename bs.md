@@ -30,7 +30,7 @@ This document explains the full journey of building neural models from first pri
 Given inputs $x \in \mathbb{R}^n$, weights $w \in \mathbb{R}^n$, bias $b$:
 
 $$
-z = \sum_i w_i x_i + b,\quad
+z = \sum_{i=1}^{n} w_i x_i + b,\quad
 \hat y = H(z) = \begin{cases}
 1 & z \ge 0 \\
 0 & \text{otherwise}
@@ -58,7 +58,7 @@ Only misclassified samples update parameters (classic perceptron rule, not gradi
 Layer sizes: $L_0$ (input) … $L_k$ (output). For neuron $j$ in layer $L$:
 
 $$
-z_j^{(L)} = \sum_i w_{j,i}^{(L)}\, a_i^{(L-1)} + b_j^{(L)},\quad
+z_j^{(L)} = \sum_{i=1}^{n_{L-1}} w_{j,i}^{(L)}\, a_i^{(L-1)} + b_j^{(L)},\quad
 a_j^{(L)} = \sigma\big(z_j^{(L)}\big) = \frac{1}{1 + e^{-z_j^{(L)}}}.
 $$
 
@@ -71,7 +71,7 @@ Internal storage:
 ### Loss (Per Sample, MSE)
 
 $$
-\mathcal{L} = \sum_j \tfrac{1}{2}\,\big(a_j^{(\text{out})} - y_j\big)^2.
+\mathcal{L} = \sum_{j=1}^{n_{\text{out}}} \tfrac{1}{2}\,\big(a_j^{(\text{out})} - y_j\big)^2.
 $$
 
 Using MSE for simplicity (cross‑entropy would be more suitable for classification but requires softmax modifications).
@@ -89,7 +89,7 @@ $$
 Hidden layer deltas (chain rule):
 
 $$
-\delta_i^{(L)} = \left( \sum_j w_{j,i}^{(L+1)}\, \delta_j^{(L+1)} \right)\, \sigma'\!\big(a_i^{(L)}\big).
+\delta_i^{(L)} = \left( \sum_{j=1}^{n_{L+1}} w_{j,i}^{(L+1)}\, \delta_j^{(L+1)} \right)\, \sigma'\!\big(a_i^{(L)}\big).
 $$
 
 Weight & bias gradients:

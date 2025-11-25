@@ -25,9 +25,22 @@ def sigmoid_derivative(y: float) -> float:
     return y * (1.0 - y)
 
 
+def softmax(vec: List[float]) -> List[float]:
+    m = max(vec)
+    exps = [math.exp(v - m) for v in vec]
+    s = sum(exps)
+    return [e / s for e in exps]
+
+
 class MLP:
     def __init__(
-        self, layer_sizes: List[int], lr: float = 0.5, seed: int | None = None
+        self,
+        layer_sizes: List[int],
+        lr: float = 0.5,
+        seed: int | None = None,
+        output_activation: str = "sigmoid",  # or 'softmax'
+        loss: str = "mse",  # 'mse' or 'ce' (cross-entropy only with softmax)
+        class_weights: List[float] | None = None,
     ):
         if len(layer_sizes) < 2:
             raise ValueError("Need at least input and output layer")
@@ -35,6 +48,21 @@ class MLP:
             raise ValueError("All layer sizes must be > 0")
         self.layer_sizes = layer_sizes
         self.lr = lr
+        if output_activation not in ("sigmoid", "softmax"):
+            raise ValueError(
+                "output_activation must be 'sigmoid' or 'softmax'"
+            )
+        if loss not in ("mse", "ce"):
+            raise ValueError("loss must be 'mse' or 'ce'")
+        if output_activation == "softmax" and layer_sizes[-1] == 1:
+            raise ValueError("softmax output requires >1 output neurons")
+        if loss == "ce" and output_activation != "softmax":
+            raise ValueError(
+                "cross-entropy currently only supported with softmax output"
+            )
+        self.output_activation = output_activation
+        self.loss = loss
+        self.class_weights = class_weights
         if seed is not None:
             random.seed(seed)
         # Weights: list of matrices (next_layer_size x current_layer_size)
@@ -61,6 +89,9 @@ class MLP:
             "learning_rate": self.lr,
             "weights": self.weights,
             "biases": self.biases,
+            "output_activation": self.output_activation,
+            "loss": self.loss,
+            "class_weights": self.class_weights,
         }
 
     @staticmethod
@@ -68,10 +99,15 @@ class MLP:
         required = {"layer_sizes", "learning_rate", "weights", "biases"}
         if not required.issubset(data):
             raise ValueError("Invalid MLP model file")
+        output_activation = data.get("output_activation", "sigmoid")
+        loss = data.get("loss", "mse")
         mlp = MLP(
-            data["layer_sizes"], lr=data["learning_rate"]
+            data["layer_sizes"],
+            lr=data["learning_rate"],
+            output_activation=output_activation,
+            loss=loss,
+            class_weights=data.get("class_weights"),
         )  # initializes sizes
-        # Replace weights/biases with stored values (shape consistency assumed)
         if len(mlp.weights) != len(data["weights"]):
             raise ValueError("Weights shape mismatch")
         mlp.weights = data["weights"]
@@ -90,7 +126,6 @@ class MLP:
             w_mat = self.weights[layer_idx]
             b_vec = self.biases[layer_idx]
             z_layer: List[float] = []
-            a_next: List[float] = []
             for neuron_idx in range(len(w_mat)):
                 w = w_mat[neuron_idx]
                 z = (
@@ -98,7 +133,14 @@ class MLP:
                     + b_vec[neuron_idx]
                 )
                 z_layer.append(z)
-                a_next.append(sigmoid(z))
+            # Activation choice: last layer may use softmax
+            if (
+                layer_idx == len(self.weights) - 1
+                and self.output_activation == "softmax"
+            ):
+                a_next = softmax(z_layer)
+            else:
+                a_next = [sigmoid(z) for z in z_layer]
             zs.append(z_layer)
             activations.append(a_next)
             a = a_next
@@ -112,7 +154,22 @@ class MLP:
         self, activations: List[List[float]], target: List[float]
     ) -> Tuple[List[List[List[float]]], List[List[float]], float, bool]:
         output = activations[-1]
-        loss = sum(0.5 * (o - t) ** 2 for o, t in zip(output, target))
+        if self.loss == "mse":
+            loss = sum(0.5 * (o - t) ** 2 for o, t in zip(output, target))
+        else:  # cross-entropy with softmax output
+            # Add small epsilon for numerical stability
+            eps = 1e-12
+            base = -sum(t * math.log(o + eps) for o, t in zip(output, target))
+            if self.class_weights:
+                # weight by true class
+                w_true = 0.0
+                for i, t in enumerate(target):
+                    if t > 0.0:
+                        w_true = self.class_weights[i]
+                        break
+                loss = w_true * base
+            else:
+                loss = base
         is_correct = False
         if len(target) == 1:
             pred_bin = 1 if output[0] >= 0.5 else 0
@@ -126,8 +183,18 @@ class MLP:
         out_acts = activations[-1]
         delta_out: List[float] = []
         for i in range(len(out_acts)):
-            error = out_acts[i] - target[i]
-            delta_out.append(error * sigmoid_derivative(out_acts[i]))
+            if self.output_activation == "softmax" and self.loss == "ce":
+                # Softmax + cross-entropy simplifies gradient; apply class weighting if provided
+                scale = 1.0
+                if self.class_weights:
+                    for k, t in enumerate(target):
+                        if t > 0.0:
+                            scale = self.class_weights[k]
+                            break
+                delta_out.append(scale * (out_acts[i] - target[i]))
+            else:
+                error = out_acts[i] - target[i]
+                delta_out.append(error * sigmoid_derivative(out_acts[i]))
         deltas[last_layer_idx] = delta_out
         for layer_idx in range(last_layer_idx - 1, -1, -1):
             layer_deltas: List[float] = []

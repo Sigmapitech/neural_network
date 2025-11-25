@@ -56,6 +56,16 @@ def main():
     p.add_argument("--mode", choices=["binary", "multi"], default="binary")
     p.add_argument("--hidden", type=int, default=27, help="Hidden layer size")
     p.add_argument("--epochs", type=int, default=4000)
+    p.add_argument(
+        "--softmax",
+        action="store_true",
+        help="Use softmax + cross-entropy for multi-class (ignored in binary)",
+    )
+    p.add_argument(
+        "--no-class-weights",
+        action="store_true",
+        help="Disable class-weighted loss for multi-class (softmax)",
+    )
     p.add_argument("--lr", type=float, default=0.3)
     p.add_argument(
         "--batch", type=int, default=64, help="Mini-batch size (0=full batch)"
@@ -86,16 +96,39 @@ def main():
     if args.mode == "binary":
         data = build_binary_dataset()
         output_size = 1
+        output_activation = "sigmoid"
+        loss = "mse"
     else:
         data = build_multiclass_dataset()
         output_size = 3
+        output_activation = "softmax" if args.softmax else "sigmoid"
+        loss = "ce" if args.softmax else "mse"
+        class_weights = None
+        if args.softmax and not args.no_class_weights:
+            # Compute inverse-frequency normalized weights: N / (K * count_c)
+            counts = [0, 0, 0]
+            for _, y in data:
+                idx = max(range(len(y)), key=lambda i: y[i])
+                counts[idx] += 1
+            N = len(data)
+            K = 3
+            class_weights = [N / (K * c) if c > 0 else 0.0 for c in counts]
+            print(
+                f"Class counts={counts} -> weights={','.join(f'{w:.3f}' for w in class_weights)}"
+            )
 
     train_set, val_set = split_dataset(data, val_ratio=args.val)
     print(
         f"Dataset size: total={len(data)} train={len(train_set)} val={len(val_set)} mode={args.mode}"
     )
 
-    mlp = MLP([9, args.hidden, output_size], lr=args.lr)
+    mlp = MLP(
+        [9, args.hidden, output_size],
+        lr=args.lr,
+        output_activation=output_activation,
+        loss=loss,
+        class_weights=(class_weights if args.mode == "multi" else None),
+    )
     history = mlp.train(
         train_set,
         epochs=args.epochs,

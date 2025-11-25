@@ -39,7 +39,9 @@ def main():
     mlp = MLP.from_dict(data)
     x = args.input
     out = mlp.predict(x)
-    print(f"Input={x}\nRaw Output={out}")
+    print(
+        f"Input={x}\nRaw Output={out}\nOutputActivation={getattr(mlp,'output_activation','sigmoid')}"
+    )
     if len(out) == 1:
         print(f"Binary Thresholded={(1 if out[0] >= 0.5 else 0)}")
     else:
