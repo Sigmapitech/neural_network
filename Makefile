@@ -5,7 +5,7 @@
 ## Makefile
 ##
 
-NAME = my_torch_analyzer
+NAME = my_torch_analyzer my_torch_generator
 
 all: $(NAME)
 
@@ -14,7 +14,7 @@ venv:
 	venv/bin/pip install -e .
 
 $(NAME): venv
-	ln -s venv/bin/$@ $@
+	for d in $@; do ln -s {venv/bin/,}$@; done
 
 .PHONY: all $(NAME)
 
