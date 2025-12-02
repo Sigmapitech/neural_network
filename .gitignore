@@ -5,8 +5,13 @@ __pycache__/
 
 # Ignore dataset and final executable
 my_torch_analyzer
+my_torch_generator
 dataset/
 data/
 results/
 
 .pre-commit-config.yaml
+
+# Ignore neural network files except the basic network
+*.nn
+!my_torch_network_basic.nn
