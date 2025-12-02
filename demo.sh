@@ -16,23 +16,34 @@ fi
 echo "=== MY_TORCH Chess Analyzer - Quick Start ==="
 echo ""
 
+VENV=venv
+
+if command -v python3 &>/dev/null; then
+  PYTHON=python3
+elif command -v python &>/dev/null; then
+  PYTHON=python
+else
+  echo "No python or python3 executable found." >&2
+  exit 1
+fi
+
 # Bootstrap environment if needed
-if [ ! -d ".venv" ] && [ ! -f "my_torch_analyzer" ]; then
+if [ ! -d "$VENV" ] && [ ! -f "my_torch_analyzer" ]; then
     echo "0. Setting up environment (first run only)..."
     if [ -f "/.dockerenv" ]; then
         ./bootstrap-docker-venv.sh
-        .venv/bin/pip install -e .
+        $VENV/bin/pip install -e .
     else
-        python3 -m venv .venv
-        .venv/bin/pip install -e .
+        python3 -m venv $VENV
+        $VENV/bin/pip install -e .
     fi
     cat > my_torch_analyzer << 'WRAPPER'
 #!/usr/bin/env bash
-exec "$(dirname "$0")/.venv/bin/python3" "$(dirname "$0")/src/my_torch_analyzer.py" "$@"
+exec "$VENV/bin/$PYTHON" "$(dirname "$0")/src/my_torch_analyzer.py" "$@"
 WRAPPER
     cat > my_torch_generator << 'WRAPPER'
 #!/usr/bin/env bash
-exec "$(dirname "$0")/.venv/bin/python3" "$(dirname "$0")/src/my_torch_generator.py" "$@"
+exec "$(dirname "$0")/$VENV/bin/$PYTHON" "$(dirname "$0")/src/my_torch_generator.py" "$@"
 WRAPPER
     chmod +x my_torch_analyzer my_torch_generator
     echo "✓ Environment ready!"
@@ -40,11 +51,11 @@ WRAPPER
 fi
 
 echo "1. Generating sample dataset (500 positions)..."
-.venv/bin/python3 scripts/generate_chess_dataset.py sample data/demo_dataset.txt --count 500
+$VENV/bin/$PYTHON scripts/generate_chess_dataset.py sample data/demo_dataset.txt --count 500
 
 echo ""
 echo "2. Showing dataset statistics..."
-.venv/bin/python3 scripts/generate_chess_dataset.py stats data/demo_dataset.txt
+$VENV/bin/$PYTHON scripts/generate_chess_dataset.py stats data/demo_dataset.txt
 
 echo ""
 echo "3. Generating a custom network config for demo..."
