@@ -14,7 +14,7 @@ venv:
 	venv/bin/pip install -e .
 
 $(NAME): venv
-	for d in $@; do ln -s {venv/bin/,}$@; done
+	for d in $@; do [ -f $@ ] || ln -s {venv/bin/,}$@; done
 
 .PHONY: all $(NAME)
 
