@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import random
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, List, Tuple
 
-from .. import losses
+from .. import activations, losses
 from ..optimizer import Optimizer, SGDOptimizer
 
 
@@ -92,24 +93,218 @@ class Network:
 
     # Method stubs for dynamically attached methods (implemented in submodules)
     @staticmethod
-    def _get_activation(name: str) -> Callable[[float], float]: ...
+    def get_activation(name: str) -> Callable[[float], float]:
+        """Get activation function by name."""
+        return {
+            "sigmoid": activations.sigmoid,
+            "relu": activations.relu,
+            "tanh": activations.tanh,
+            "linear": activations.linear,
+        }[name]
 
     @staticmethod
-    def _get_activation_derivative(name: str) -> Callable[[float], float]: ...
+    def get_activation_derivative(name: str) -> Callable[[float], float]:
+        """Get activation derivative function by name."""
+        return {
+            "sigmoid": activations.sigmoid_derivative,
+            "relu": activations.relu_derivative,
+            "tanh": activations.tanh_derivative,
+            "linear": activations.linear_derivative,
+        }[name]
 
     def forward(
         self, inputs: List[float]
-    ) -> Tuple[List[List[float]], List[List[float]]]: ...
+    ) -> Tuple[List[List[float]], List[List[float]]]:
+        """Forward pass through the network."""
+        if len(inputs) != self.layer_sizes[0]:
+            raise ValueError(
+                f"Input size {len(inputs)} doesn't match network input {self.layer_sizes[0]}"
+            )
 
-    def predict(self, inputs: List[float]) -> List[float]: ...
+        activations_list: List[List[float]] = [inputs[:]]
+        zs: List[List[float]] = []
 
-    def _backprop_sample(
+        a = inputs
+        for layer_idx in range(len(self.weights)):
+            w_mat = self.weights[layer_idx]
+            b_vec = self.biases[layer_idx]
+
+            z_layer = [
+                sum(w_j * a_j for w_j, a_j in zip(w_mat[ni], a)) + b_vec[ni]
+                for ni in range(len(w_mat))
+            ]
+            zs.append(z_layer)
+
+            is_output = layer_idx == len(self.weights) - 1
+            if is_output and self.output_activation == "softmax":
+                a_next = activations.softmax(z_layer)
+            else:
+                act_fn = (
+                    self.get_activation(self.output_activation)
+                    if is_output
+                    else self.get_activation(self.hidden_activation)
+                )
+                a_next = [act_fn(z) for z in z_layer]
+
+            activations_list.append(a_next)
+            a = a_next
+
+        return activations_list, zs
+
+    def predict(self, inputs: List[float]) -> List[float]:
+        """Make a prediction for given inputs."""
+        activations_list, _ = self.forward(inputs)
+        return activations_list[-1]
+
+    def compute_output_delta(
         self, activations_list: List[List[float]], target: List[float]
-    ) -> Tuple[List[List[List[float]]], List[List[float]], float, bool]: ...
+    ) -> List[float]:
+        out_acts = activations_list[-1]
+
+        if self.output_activation == "softmax" and self.loss_fn in (
+            "ce",
+            "weighted_ce",
+        ):
+            scale = 1.0
+            if self.loss_fn == "weighted_ce" and self.class_weights:
+                for k, t in enumerate(target):
+                    if t > 0.5:
+                        scale = self.class_weights[k]
+                        break
+            return [
+                scale * (out_acts[i] - target[i]) for i in range(len(out_acts))
+            ]
+        else:
+            act_deriv = self.get_activation_derivative(self.output_activation)
+            return [
+                (out_acts[i] - target[i]) * act_deriv(out_acts[i])
+                for i in range(len(out_acts))
+            ]
+
+    def compute_hidden_deltas(
+        self, activations_list: List[List[float]], output_delta: List[float]
+    ) -> List[List[float]]:
+        """Backpropagate delta through hidden layers."""
+        deltas: List[List[float]] = [
+            [] for _ in range(len(self.layer_sizes) - 1)
+        ]
+        last_layer_idx = len(self.layer_sizes) - 2
+        deltas[last_layer_idx] = output_delta
+
+        act_deriv = self.get_activation_derivative(self.hidden_activation)
+        for layer_idx in range(last_layer_idx - 1, -1, -1):
+            layer_deltas = []
+            for i in range(self.layer_sizes[layer_idx + 1]):
+                s = sum(
+                    self.weights[layer_idx + 1][j][i]
+                    * deltas[layer_idx + 1][j]
+                    for j in range(self.layer_sizes[layer_idx + 2])
+                )
+                a_val = activations_list[layer_idx + 1][i]
+                layer_deltas.append(s * act_deriv(a_val))
+            deltas[layer_idx] = layer_deltas
+
+        return deltas
+
+    def compute_gradients(
+        self, activations_list: List[List[float]], deltas: List[List[float]]
+    ) -> Tuple[List[List[List[float]]], List[List[float]]]:
+        """Compute weight and bias gradients from deltas."""
+        grad_w = [
+            [[0.0 for _ in row] for row in layer] for layer in self.weights
+        ]
+        grad_b = [[0.0 for _ in layer] for layer in self.biases]
+
+        for layer_idx in range(len(self.weights)):
+            for neuron_idx in range(len(self.weights[layer_idx])):
+                for w_idx in range(len(self.weights[layer_idx][neuron_idx])):
+                    grad_w[layer_idx][neuron_idx][w_idx] = (
+                        deltas[layer_idx][neuron_idx]
+                        * activations_list[layer_idx][w_idx]
+                    )
+                grad_b[layer_idx][neuron_idx] = deltas[layer_idx][neuron_idx]
+
+        return grad_w, grad_b
+
+    def backprop_sample(
+        self, activations_list: List[List[float]], target: List[float]
+    ) -> Tuple[List[List[List[float]]], List[List[float]], float, bool]:
+        """Full backpropagation for a single sample."""
+        output = activations_list[-1]
+        loss = self._compute_loss(output, target)
+
+        # Check if prediction is correct
+        is_correct = False
+        if len(target) == 1:
+            pred_bin = 1 if output[0] >= 0.5 else 0
+            is_correct = pred_bin == int(target[0])
+        else:
+            pred_idx = max(range(len(output)), key=lambda i: output[i])
+            tgt_idx = max(range(len(target)), key=lambda i: target[i])
+            is_correct = pred_idx == tgt_idx
+
+        # Compute deltas
+        output_delta = self.compute_output_delta(activations_list, target)
+        deltas = self.compute_hidden_deltas(activations_list, output_delta)
+
+        # Compute gradients
+        grad_w, grad_b = self.compute_gradients(activations_list, deltas)
+
+        return grad_w, grad_b, loss, is_correct
 
     def train_epoch(
-        self, dataset: List[Tuple[List[float], List[float]]], batch_size: int
-    ) -> Tuple[float, float]: ...
+        self,
+        dataset: List[Tuple[List[float], List[float]]],
+        batch_size: int = 0,
+    ) -> Tuple[float, float]:
+        if batch_size <= 0 or batch_size > len(dataset):
+            batch_size = len(dataset)
+
+        total_loss = 0.0
+        total_correct = 0
+        random.shuffle(dataset)
+
+        for start in range(0, len(dataset), batch_size):
+            batch = dataset[start : start + batch_size]
+
+            acc_grad_w = [
+                [[0.0 for _ in row] for row in layer] for layer in self.weights
+            ]
+            acc_grad_b = [[0.0 for _ in layer] for layer in self.biases]
+
+            for x, target in batch:
+                activations_list, _ = self.forward(x)
+                grad_w, grad_b, loss, is_correct = self.backprop_sample(
+                    activations_list, target
+                )
+
+                total_loss += loss
+                if is_correct:
+                    total_correct += 1
+
+                for li in range(len(self.weights)):
+                    for ni in range(len(self.weights[li])):
+                        for wi in range(len(self.weights[li][ni])):
+                            acc_grad_w[li][ni][wi] += grad_w[li][ni][wi]
+                        acc_grad_b[li][ni] += grad_b[li][ni]
+
+            bsz = len(batch)
+            for li in range(len(self.weights)):
+                for ni in range(len(self.weights[li])):
+                    for wi in range(len(self.weights[li][ni])):
+                        acc_grad_w[li][ni][wi] /= bsz
+                    acc_grad_b[li][ni] /= bsz
+
+            self.optimizer.update(
+                self.weights, self.biases, acc_grad_w, acc_grad_b
+            )
+
+        self.optimizer.decay_lr()
+
+        m = len(dataset)
+        avg_loss = total_loss / m
+        accuracy = total_correct / m if m else 0.0
+        return avg_loss, accuracy
 
     def train(
         self,
@@ -117,18 +312,90 @@ class Network:
         epochs: int = 1000,
         target_accuracy: float = 1.0,
         batch_size: int = 32,
-        validation_data: Optional[
-            List[Tuple[List[float], List[float]]]
-        ] = None,
+        validation_data: List[Tuple[List[float], List[float]]] | None = None,
         verbose: bool = True,
-    ) -> List[Tuple[int, float, float, float]]: ...
+    ) -> List[Tuple[int, float, float, float]]:
+        history: List[Tuple[int, float, float, float]] = []
 
-    def to_dict(self) -> Dict[str, Any]: ...
+        for epoch in range(1, epochs + 1):
+            loss, acc = self.train_epoch(dataset, batch_size=batch_size)
 
-    def save(self, filepath: str) -> None: ...
+            val_acc = 0.0
+            if validation_data:
+                val_acc = self.evaluate(validation_data)
 
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> Network: ...
+            history.append((epoch, loss, acc, val_acc))
 
-    @staticmethod
-    def load(filepath: str) -> Network: ...
+            if verbose and (epoch % 100 == 0 or acc >= target_accuracy):
+                val_str = (
+                    f" val_acc={val_acc*100:.1f}%" if validation_data else ""
+                )
+                print(
+                    f"Epoch {epoch}: loss={loss:.4f} train_acc={acc*100:.1f}%{val_str}"
+                )
+
+            if acc >= target_accuracy:
+                if verbose:
+                    print(
+                        f"Reached target accuracy {target_accuracy*100:.1f}% at epoch {epoch}"
+                    )
+                break
+
+        return history
+
+    def to_dict(self) -> dict:
+        return {
+            "version": "1.0",
+            "architecture": {
+                "layer_sizes": self.layer_sizes,
+                "hidden_activation": self.hidden_activation,
+                "output_activation": self.output_activation,
+            },
+            "hyperparameters": {
+                "loss": self.loss_fn,
+                "optimizer": self.optimizer.to_dict(),
+                "class_weights": self.class_weights,
+            },
+            "parameters": {
+                "weights": self.weights,
+                "biases": self.biases,
+            },
+        }
+
+    def save(self, filepath: str) -> None:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        arch = data["architecture"]
+        hyper = data.get("hyperparameters", {})
+        params = data["parameters"]
+
+        opt_data = hyper.get("optimizer", {})
+        if opt_data.get("type") == "sgd":
+            optimizer = SGDOptimizer.from_dict(opt_data)
+        else:
+            optimizer = SGDOptimizer(
+                learning_rate=opt_data.get("learning_rate", 0.3)
+            )
+
+        net = cls(
+            layer_sizes=arch["layer_sizes"],
+            hidden_activation=arch.get("hidden_activation", "sigmoid"),
+            output_activation=arch.get("output_activation", "sigmoid"),
+            loss=hyper.get("loss", "mse"),
+            optimizer=optimizer,
+            class_weights=hyper.get("class_weights"),
+        )
+
+        net.weights = params["weights"]
+        net.biases = params["biases"]
+
+        return net
+
+    @classmethod
+    def load(cls, filepath: str):
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return cls.from_dict(data)
