@@ -35,7 +35,10 @@ pip \
 popd
 popd
 
-virtualenv venv
+virtualenv venv \
+  || $HOME/.local/bin/virtualenv venv \
+  || /home/student/.local/bin/virtualenv venv
+
 venv/bin/pip \
     install  \
     --no-build-isolation \
