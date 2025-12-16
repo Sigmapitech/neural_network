@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from chess_utils import fen_to_tensor
 from my_torch import Network
 
@@ -10,14 +12,20 @@ def predict_mode(
 ) -> None:
     fens = load_chessfile_predict(chessfile)
 
-    for fen in fens:
+    def process_fen(fen):
         try:
             x = fen_to_tensor(fen, encoding=encoding)
             output = network.predict(x)
             label = vector_to_label(output)
-            print(label)
+            return label
         except Exception as e:
-            print(f"Error: {e}")
+            return f"Error: {e}"
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = executor.map(process_fen, fens)
+
+        for result in results:
+            print(result)
 
 
 def train_mode(
