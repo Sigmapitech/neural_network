@@ -27,7 +27,7 @@ This will create: basic_network_1.nn, basic_network_2.nn, basic_network_3.nn
 
     if len(args.configs) % 2 != 0:
         print("Error: Arguments must be pairs of config_file and count")
-        return 1
+        return 84
 
     for i in range(0, len(args.configs), 2):
         config_file = args.configs[i]
@@ -35,20 +35,20 @@ This will create: basic_network_1.nn, basic_network_2.nn, basic_network_3.nn
             count = int(args.configs[i + 1])
         except ValueError:
             print(f"Error: '{args.configs[i + 1]}' is not a valid number")
-            return 1
+            return 84
 
         if count <= 0:
             print(f"Error: count must be positive, got {count}")
-            return 1
+            return 84
 
         try:
             generate_networks(config_file, count)
         except FileNotFoundError:
             print(f"Error: Config file '{config_file}' not found")
-            return 1
+            return 84
         except Exception as e:
             print(f"Error processing {config_file}: {e}")
-            return 1
+            return 84
 
     return 0
 

@@ -60,10 +60,10 @@ Examples:
         print(f"Loaded network: {network.layer_sizes}")
     except FileNotFoundError:
         print(f"Error: Network file '{args.loadfile}' not found")
-        return 1
+        return 84
     except Exception as e:
         print(f"Error loading network: {e}")
-        return 1
+        return 84
 
     if args.predict:
         predict_mode(network, args.chessfile, encoding=args.encoding)
