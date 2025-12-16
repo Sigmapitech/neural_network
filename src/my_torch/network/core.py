@@ -356,7 +356,7 @@ class Network:
 
             history.append((epoch, loss, acc, val_acc))
 
-            if verbose and (epoch % 100 == 0 or acc >= target_accuracy):
+            if verbose:
                 val_str = (
                     f" val_acc={val_acc*100:.1f}%" if validation_data else ""
                 )
