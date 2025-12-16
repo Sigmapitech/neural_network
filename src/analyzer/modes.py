@@ -1,4 +1,5 @@
-from concurrent.futures import ThreadPoolExecutor
+import functools
+from concurrent.futures import ProcessPoolExecutor
 
 from chess_utils import fen_to_tensor
 from my_torch import Network
@@ -7,22 +8,23 @@ from .data_loader import load_chessfile_predict, load_chessfile_train
 from .labels import vector_to_label
 
 
+def process_fen(network: Network, encoding: str, fen: str):
+    try:
+        output = network.predict(fen_to_tensor(fen, encoding=encoding))
+        return vector_to_label(output)
+    except Exception as e:
+        return f"Error: {e}"
+
+
 def predict_mode(
     network: Network, chessfile: str, encoding: str = "simple"
 ) -> None:
     fens = load_chessfile_predict(chessfile)
 
-    def process_fen(fen):
-        try:
-            x = fen_to_tensor(fen, encoding=encoding)
-            output = network.predict(x)
-            label = vector_to_label(output)
-            return label
-        except Exception as e:
-            return f"Error: {e}"
+    dispatch = functools.partial(process_fen, network, encoding)
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        results = executor.map(process_fen, fens)
+    with ProcessPoolExecutor(max_workers=4) as executor:
+        results = executor.map(dispatch, fens)
 
         for result in results:
             print(result)
