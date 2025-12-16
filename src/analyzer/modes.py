@@ -24,7 +24,7 @@ def predict_mode(
     dispatch = functools.partial(process_fen, network, encoding)
 
     with ProcessPoolExecutor(max_workers=4) as executor:
-        results = executor.map(dispatch, fens)
+        results = executor.map(dispatch, fens, chunksize=1024)
 
         for result in results:
             print(result)
