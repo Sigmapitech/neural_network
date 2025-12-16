@@ -4,6 +4,8 @@ import json
 import random
 from typing import Callable, List, Tuple
 
+import numpy as np
+
 from .. import activations, losses
 from ..optimizer import Optimizer, SGDOptimizer
 
@@ -121,35 +123,63 @@ class Network:
                 f"Input size {len(inputs)} doesn't match network input {self.layer_sizes[0]}"
             )
 
-        activations_list: List[List[float]] = [inputs[:]]
-        zs: List[List[float]] = []
+        # Convert inputs to numpy array
+        a = np.array(inputs)
 
-        a = inputs
+        # Store activations and z values for each layer
+        activations_list = [a]
+        zs = []
+
         for layer_idx in range(len(self.weights)):
+            # Extract weight matrix and bias vector for current layer
             w_mat = self.weights[layer_idx]
             b_vec = self.biases[layer_idx]
 
-            z_layer = [
-                sum(w_j * a_j for w_j, a_j in zip(w_mat[ni], a)) + b_vec[ni]
-                for ni in range(len(w_mat))
-            ]
+            # Compute z values: z = W * a + b
+            z_layer = np.dot(w_mat, a) + b_vec
             zs.append(z_layer)
 
+            # Determine if it's the output layer
             is_output = layer_idx == len(self.weights) - 1
+
+            # Activation function for output layer (e.g., softmax)
             if is_output and self.output_activation == "softmax":
-                a_next = activations.softmax(z_layer)
+                a_next = self.softmax(z_layer)
             else:
-                act_fn = (
-                    self.get_activation(self.output_activation)
+                # Use appropriate activation function for hidden layers
+                act_fn = self.get_activation(
+                    self.output_activation
                     if is_output
-                    else self.get_activation(self.hidden_activation)
+                    else self.hidden_activation
                 )
-                a_next = [act_fn(z) for z in z_layer]
+                a_next = act_fn(z_layer)
 
             activations_list.append(a_next)
             a = a_next
 
+        # Convert activations back to list of lists if needed
+        activations_list = [a.tolist() for a in activations_list]
+        zs = [z.tolist() for z in zs]
+
         return activations_list, zs
+
+    def softmax(self, z: np.ndarray) -> np.ndarray:
+        """Softmax activation function."""
+        exp_z = np.exp(z - np.max(z))  # Numerical stability
+        return exp_z / np.sum(exp_z, axis=-1, keepdims=True)
+
+    def get_activation(self, activation_type: str):
+        """Returns the activation function based on the type."""
+        if activation_type == "sigmoid":
+            return lambda x: 1 / (1 + np.exp(-x))
+        elif activation_type == "tanh":
+            return np.tanh
+        elif activation_type == "relu":
+            return lambda x: np.maximum(0, x)
+        else:
+            raise ValueError(
+                f"Activation function {activation_type} not recognized"
+            )
 
     def predict(self, inputs: List[float]) -> List[float]:
         """Make a prediction for given inputs."""
