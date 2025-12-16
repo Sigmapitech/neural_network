@@ -11,7 +11,7 @@ all: $(NAME)
 
 venv:
 	python -m venv venv || ./bootstrap-docker-venv.sh
-	venv/bin/pip install -e . --no-build-isolation
+	venv/bin/pip install -e . || venv/bin/pip install -e . --no-build-isolation
 
 $(NAME): venv
 	for d in $@; do ln -s venv/bin/$@ $@; done
