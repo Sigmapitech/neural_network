@@ -55,9 +55,9 @@ Examples:
     args = parser.parse_args()
 
     try:
-        print(f"Loading network from {args.loadfile}...")
+        print(f"Loading network from {args.loadfile}...", file=sys.stderr)
         network = Network.load(args.loadfile)
-        print(f"Loaded network: {network.layer_sizes}")
+        print(f"Loaded network: {network.layer_sizes}", file=sys.stderr)
     except FileNotFoundError:
         print(f"Error: Network file '{args.loadfile}' not found")
         return 84
