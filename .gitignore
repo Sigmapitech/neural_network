@@ -14,4 +14,4 @@ results/
 
 # Ignore neural network files except the basic network
 *.nn
-!my_torch_network_basic.nn
+!my_torch_network.nn
