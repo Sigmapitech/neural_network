@@ -1,42 +1,36 @@
-from typing import List
+from typing import List, Literal
+
+Label = Literal[
+    "Nothing",
+    "Check White",
+    "Check Black",
+    "Checkmate White",
+    "Checkmate Black",
+]
+
+LABELS: list[Label] = [
+    "Nothing",
+    "Check White",
+    "Check Black",
+    "Checkmate White",
+    "Checkmate Black",
+]
 
 
-def label_to_vector(label: str) -> List[float]:
-    label = label.strip()
+def label_to_vector(label: Label) -> List[float]:
+    vec = [0.0] * 5
+    vec[LABELS.index(label)] = 1.0
 
-    if label == "Nothing":
-        return [1.0, 0.0, 0.0, 0.0, 0.0]
-    elif label in ("Check White", "CheckWhite"):
-        return [0.0, 1.0, 0.0, 0.0, 0.0]
-    elif label in ("Check Black", "CheckBlack"):
-        return [0.0, 0.0, 1.0, 0.0, 0.0]
-    elif label in ("Checkmate White", "CheckmateWhite"):
-        return [0.0, 0.0, 0.0, 1.0, 0.0]
-    elif label in ("Checkmate Black", "CheckmateBlack"):
-        return [0.0, 0.0, 0.0, 0.0, 1.0]
-    elif label == "Check":
-        return [0.0, 1.0, 0.0]
-    elif label == "Checkmate":
-        return [0.0, 0.0, 1.0]
-    else:
-        raise ValueError(f"Unknown label: {label}")
+    return vec
 
 
-def vector_to_label(vec: List[float], mode: str = "auto") -> str:
-    if mode == "auto":
-        mode = "detailed" if len(vec) == 5 else "basic"
+def vector_to_label(vec: List[float]) -> Label:
+    pc = -1
+    pv = float("-inf")
 
-    pred_idx = max(range(len(vec)), key=lambda i: vec[i])
+    for c, v in enumerate(vec):
+        if v > pv:
+            pv = v
+            pc = c
 
-    if mode == "detailed" and len(vec) == 5:
-        labels = [
-            "Nothing",
-            "Check White",
-            "Check Black",
-            "Checkmate White",
-            "Checkmate Black",
-        ]
-        return labels[pred_idx]
-    else:
-        labels = ["Nothing", "Check", "Checkmate"]
-        return labels[min(pred_idx, 2)]
+    return LABELS[pc]

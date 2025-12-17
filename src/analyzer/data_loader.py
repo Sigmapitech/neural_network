@@ -1,20 +1,23 @@
-from typing import List, Tuple
+from collections import defaultdict
+from typing import DefaultDict, List, Tuple, TypedDict, cast
 
 from chess_utils import fen_to_tensor
 
-from .labels import label_to_vector
+from .labels import label_to_vector, vector_to_label
+
+FenVec = list[float]
 
 
-def load_chessfile_predict(filepath: str) -> List[str]:
+def load_chessfile_predict(filepath: str) -> list[str]:
     with open(filepath, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
 
 def load_chessfile_train(
     filepath: str, encoding: str = "simple"
-) -> List[Tuple[List[float], List[float]]]:
+) -> list[tuple[FenVec, list[float]]]:
 
-    dataset: List[Tuple[List[float], List[float]]] = []
+    dataset: list[tuple[FenVec, list[float]]] = []
 
     with open(filepath, "r", encoding="utf-8") as f:
         for line_num, line in enumerate(f, 1):
@@ -37,3 +40,21 @@ def load_chessfile_train(
                 continue
 
     return dataset
+
+
+class Dataset(TypedDict):
+    nothing: list[FenVec]
+    checkmate_white: list[FenVec]
+    checkmate_black: list[FenVec]
+    check_white: list[FenVec]
+    check_black: list[FenVec]
+
+
+def sort_dataset(ds: list[tuple[FenVec, list[float]]]) -> Dataset:
+    out: DefaultDict[str, list[FenVec]] = defaultdict(list)
+
+    for fen, expected in ds:
+        key = vector_to_label(expected).lower().replace(" ", "_")
+        out[key].append(fen)
+
+    return cast(Dataset, out)
