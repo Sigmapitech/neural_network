@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import random
-from typing import Callable, List, Tuple
+import sys
+from pathlib import Path
+from typing import Callable, List, Self, Tuple
 
 import numpy as np
 
@@ -13,18 +15,22 @@ from ..optimizer import Optimizer, SGDOptimizer
 class Network:
     def __init__(
         self,
+        weights,
+        biases,
         layer_sizes: List[int],
         hidden_activation: str = "sigmoid",
         output_activation: str = "sigmoid",
         loss: str = "mse",
         optimizer: Optimizer | None = None,
         class_weights: List[float] | None = None,
-        seed: int | None = None,
     ):
         if len(layer_sizes) < 2:
             raise ValueError("Need at least input and output layer")
         if any(s <= 0 for s in layer_sizes):
             raise ValueError("All layer sizes must be > 0")
+
+        self.biases = biases
+        self.weights = weights
 
         self.layer_sizes = layer_sizes
         self.hidden_activation = hidden_activation
@@ -38,26 +44,35 @@ class Network:
         if loss == "ce" and output_activation not in ("softmax",):
             raise ValueError("Cross-entropy requires softmax output")
 
+    @classmethod
+    def random_net(
+        cls, layer_sizes: List[int], seed: int | None = None, **kwargs
+    ) -> Self:
         if seed is not None:
             random.seed(seed)
 
-        self.weights: List[List[List[float]]] = []
-        self.biases: List[List[float]] = []
+        weights: List[List[List[float]]] = []
+        biases: List[List[float]] = []
 
         for i in range(len(layer_sizes) - 1):
             in_size = layer_sizes[i]
             out_size = layer_sizes[i + 1]
 
             scale = (2.0 / in_size) ** 0.5
-            self.weights.append(
+            weights.append(
                 [
                     [random.gauss(0, scale) for _ in range(in_size)]
                     for _ in range(out_size)
                 ]
             )
-            self.biases.append(
-                [random.uniform(-0.1, 0.1) for _ in range(out_size)]
-            )
+            biases.append([random.uniform(-0.1, 0.1) for _ in range(out_size)])
+
+        return cls(
+            layer_sizes=layer_sizes,
+            weights=weights,
+            biases=biases,
+            **kwargs,
+        )
 
     def _compute_loss(self, output: List[float], target: List[float]) -> float:
         if self.loss_fn == "mse":
@@ -336,43 +351,6 @@ class Network:
         accuracy = total_correct / m if m else 0.0
         return avg_loss, accuracy
 
-    def train(
-        self,
-        dataset: List[Tuple[List[float], List[float]]],
-        epochs: int = 1000,
-        target_accuracy: float = 1.0,
-        batch_size: int = 32,
-        validation_data: List[Tuple[List[float], List[float]]] | None = None,
-        verbose: bool = True,
-    ) -> List[Tuple[int, float, float, float]]:
-        history: List[Tuple[int, float, float, float]] = []
-
-        for epoch in range(1, epochs + 1):
-            loss, acc = self.train_epoch(dataset, batch_size=batch_size)
-
-            val_acc = 0.0
-            if validation_data:
-                val_acc = self.evaluate(validation_data)
-
-            history.append((epoch, loss, acc, val_acc))
-
-            if verbose:
-                val_str = (
-                    f" val_acc={val_acc*100:.1f}%" if validation_data else ""
-                )
-                print(
-                    f"Epoch {epoch}: loss={loss:.4f} train_acc={acc*100:.1f}%{val_str}"
-                )
-
-            if acc >= target_accuracy:
-                if verbose:
-                    print(
-                        f"Reached target accuracy {target_accuracy*100:.1f}% at epoch {epoch}"
-                    )
-                break
-
-        return history
-
     def to_dict(self) -> dict:
         return {
             "version": "1.0",
@@ -410,7 +388,9 @@ class Network:
                 learning_rate=opt_data.get("learning_rate", 0.3)
             )
 
-        net = cls(
+        return cls(
+            weights=params["weights"],
+            biases=params["biases"],
             layer_sizes=arch["layer_sizes"],
             hidden_activation=arch.get("hidden_activation", "sigmoid"),
             output_activation=arch.get("output_activation", "sigmoid"),
@@ -419,13 +399,27 @@ class Network:
             class_weights=hyper.get("class_weights"),
         )
 
-        net.weights = params["weights"]
-        net.biases = params["biases"]
-
-        return net
-
     @classmethod
-    def load(cls, filepath: str):
-        with open(filepath, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return cls.from_dict(data)
+    def load(cls, filepath: Path) -> Self | None:
+        try:
+            print(f"Loading network from {filepath}...", file=sys.stderr)
+            raw_config = filepath.read_text()
+
+        except FileNotFoundError:
+            print(
+                f"Error: Network file '{filepath}' not found", file=sys.stderr
+            )
+            return None
+        except Exception as e:
+            print(f"Error loading network: {e}", file=sys.stderr)
+            return None
+
+        data = json.loads(raw_config)
+        self = cls.from_dict(data)
+
+        if self is None:
+            print("Failed to load the network", file=sys.stderr)
+            return None
+
+        print(f"Loaded network: {self.layer_sizes}", file=sys.stderr)
+        return self
