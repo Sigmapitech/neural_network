@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 import sys
+import time
 
-from analyzer import predict_mode, train_mode
+from analyzer import predict_mode, predict_mode_profiled, train_mode
 from my_torch import Network
 
 
@@ -52,6 +53,10 @@ Examples:
         help="Board encoding method (default: simple)",
     )
 
+    parser.add_argument(
+        "--profiled", action="store_true", help=argparse.SUPPRESS
+    )
+
     args = parser.parse_args()
 
     try:
@@ -66,7 +71,14 @@ Examples:
         return 84
 
     if args.predict:
-        predict_mode(network, args.chessfile, encoding=args.encoding)
+        if args.profiled:
+            print("Using profiled version, single threaded.")
+            time.sleep(1)
+            predict_mode_profiled(
+                network, args.chessfile, encoding=args.encoding
+            )
+        else:
+            predict_mode(network, args.chessfile, encoding=args.encoding)
     else:
         savefile = args.save if args.save else args.loadfile
         train_mode(

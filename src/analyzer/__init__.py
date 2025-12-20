@@ -1,6 +1,6 @@
 from .data_loader import load_chessfile_predict, load_chessfile_train
 from .labels import label_to_vector, vector_to_label
-from .modes import predict_mode, train_mode
+from .modes import predict_mode, predict_mode_profiled, train_mode
 
 __all__ = [
     "load_chessfile_predict",
@@ -8,5 +8,6 @@ __all__ = [
     "label_to_vector",
     "vector_to_label",
     "predict_mode",
+    "predict_mode_profiled",
     "train_mode",
 ]

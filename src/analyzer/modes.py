@@ -6,6 +6,7 @@ from my_torch import Network
 
 from .data_loader import load_chessfile_predict, load_chessfile_train
 from .labels import vector_to_label
+from .profile import profile_it
 
 
 def process_fen(network: Network, encoding: str, fen: str):
@@ -28,6 +29,18 @@ def predict_mode(
 
         for result in results:
             print(result)
+
+
+@profile_it
+def predict_mode_profiled(
+    network: Network, chessfile: str, encoding: str = "simple"
+) -> None:
+    fens = load_chessfile_predict(chessfile)
+
+    dispatch = functools.partial(process_fen, network, encoding)
+
+    for c, fen in enumerate(fens):
+        print(c, dispatch(fen))
 
 
 def train_mode(
